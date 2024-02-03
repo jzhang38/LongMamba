@@ -3,6 +3,7 @@ This repo contains my exploration on Mamba's context scaling. It includes code t
 ## Install
 <details>
   <summary>Code</summary>
+
 ```bash
 conda create -n longmamba python=3.10 -y
 conda activate longmamba
@@ -11,6 +12,7 @@ pip install causal-conv1d>=1.1.0
 pip install mamba-ssm
 pip install -r requirements.txt
 ```
+
 </details>
 
 ## Mamba Cannot Directly Handle Longer Context
@@ -52,6 +54,7 @@ The thing is Mamba does not have positional embeddings. It is position-aware sim
 Let's say we want Mamba to operate in a 4096 context. To make it think it's still operating at 2048, we can simply decrease the delta to one half of the original value.
 <details>
   <summary>Code</summary>
+
 ```bash
 python eval.py \
     --tokenized PY007/tokenized_proof_pile_test_neox \
@@ -76,6 +79,7 @@ The very obvious next thing to do is to train Mamba on longer context with the d
 To avoid uncesary counfounders, I choose state-spaces/mamba-2.8b-slimpj and train on a [subsample of slimpajama](DKYoon/SlimPajama-6B), the same dataset that Mamba is pretrained on.
 <details>
   <summary>Code</summary>
+
 ```bash
 accelerate launch --num_processes 8  train.py --batch-size 1 --gradient-accumulate-every 8  --output-dir ./output/slim_delta_1.0_legnth_4096_step_100_lr_2e-5 \
 --wandb longmamba  --model state-spaces/mamba-2.8b-slimpj --dataset PY007/tokenized_slim6B_train_neox_4096 --max-train-steps 100   --learning-rate 2e-5
@@ -92,6 +96,7 @@ Turns out halfing the delta value performs worse than the baseline. What suprise
 I then train mamba-2.8b-slimpj on 16384 context length, the longest that I can fit with 8 A100 80GB and FSDP Fully Shard enabled. The nice thing is it only taks 9 hours.
 <details>
   <summary>Code</summary>
+
 ```bash
 srun accelerate launch --num_processes 8  finetune.py --batch-size 1 --gradient-accumulate-every 16  --output-dir ./output/2.8B_slim_legnth_16384_step_400_lr_3e-5 \
 --wandb longmamba  --model state-spaces/mamba-2.8b-slimpj --dataset PY007/tokenized_slim6B_train_neox_16384  --delta_ratio 1.0 --max-train-steps 400   --learning-rate 3e-5
@@ -129,6 +134,7 @@ Note that this test is slightly different from https://github.com/gkamradt/LLMTe
 
 <details>
   <summary>Code</summary>
+  
 ```bash
 python pass_key.py --max_tokens 16384 --num_tests 5
 python pass_key.py --max_tokens 32768 --num_tests 5
