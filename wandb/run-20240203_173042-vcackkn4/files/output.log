@@ -1,0 +1,40 @@
+
+Total GPUS: 8
+Resolving data files: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 45/45 [00:01<00:00, 23.43it/s]
+Resolving data files: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 45/45 [00:00<00:00, 121456.68it/s]
+Dataset Size: 1370296
+Max train steps: 100
+Total batch size: 64
+
+  1%|█▋                                                                                                                                                                            | 1/100 [00:21<35:47, 21.69s/it, loss=2.47, ppl=11.8]Traceback (most recent call last):
+  File "/home/yhzhang/LongMamba/train.py", line 181, in <module>
+    main(args.parse_args())
+  File "/home/yhzhang/LongMamba/train.py", line 117, in main
+    logits = model(batch["input_ids"][..., :-1], delta_ratio=args.delta_ratio).logits
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 839, in forward
+    output = self._fsdp_wrapped_module(*args, **kwargs)
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/accelerate/utils/operations.py", line 680, in forward
+    return model_forward(*args, **kwargs)
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/accelerate/utils/operations.py", line 668, in __call__
+    return convert_to_fp32(self.model_forward(*args, **kwargs))
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/accelerate/utils/operations.py", line 647, in convert_to_fp32
+    return recursively_apply(_convert_to_fp32, tensor, test_type=_is_fp16_bf16_tensor)
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/accelerate/utils/operations.py", line 110, in recursively_apply
+    return honor_type(
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/accelerate/utils/operations.py", line 82, in honor_type
+    return type(obj)(*list(generator))
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/accelerate/utils/operations.py", line 113, in <genexpr>
+    recursively_apply(
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/accelerate/utils/operations.py", line 129, in recursively_apply
+    return func(data, *args, **kwargs)
+  File "/home/yhzhang/miniconda3/envs/mamba/lib/python3.10/site-packages/accelerate/utils/operations.py", line 642, in _convert_to_fp32
+    return tensor.float()
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 786.00 MiB. GPU 0 has a total capacty of 39.39 GiB of which 748.12 MiB is free. Including non-PyTorch memory, this process has 38.66 GiB memory in use. Of the allocated memory 35.84 GiB is allocated by PyTorch, and 138.79 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF
