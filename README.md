@@ -151,7 +151,7 @@ It can be observed that the model retrieves nearly perfectly on 16384. We can fu
 
 It is interesting to see how Mamba starts to forget the beginning of the context when we increase the context length, which is very different from the Transformer that [lost in the middle](https://arxiv.org/abs/2307.03172).
 
-## Scaling the Context Length to Infinity
+## Scaling to Infinity
 
 The maximum training length we can attain is still bounded by the limited GPU memory (in my case 16384 on 8 A100 80G). To overcome this, we can train Mamba in a Transformer-XL style. That is, for each batch, instead of initializing the SSM hidden states with zeros, we initialize them with the hidden states from the previous batch. 
 
