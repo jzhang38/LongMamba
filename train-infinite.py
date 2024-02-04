@@ -119,7 +119,7 @@ def main(args):
         ssm_state = torch.zeros((1, model.config.d_model*2, 16), dtype=torch.bfloat16, device=accelerator.device).detach()
         previous_hidden_states.append((conv_state, ssm_state))
     for step, batch in enumerate(train_loader):
-        if step % clear_cache_interval == 0:
+        if completed_steps % clear_cache_interval == 0:
             for layer_idx in range(model.config.n_layer):
                 conv_state = torch.zeros((1, model.config.d_model*2, 3), dtype=torch.bfloat16, device=accelerator.device).detach()
                 ssm_state = torch.zeros((1, model.config.d_model*2, 16), dtype=torch.bfloat16, device=accelerator.device).detach()

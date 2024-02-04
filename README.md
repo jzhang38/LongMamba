@@ -140,6 +140,7 @@ Note that this test is slightly different from https://github.com/gkamradt/LLMTe
 python pass_key.py --max_tokens 16384 --num_tests 5
 python pass_key.py --max_tokens 32768 --num_tests 5
 ```
+
 </details>
 
 <img src="data/heatmap_16384.png" width="800">
@@ -150,7 +151,7 @@ It can be observed that the model retrieves nearly perfectly on 16384. We can fu
 
 It is interesting to see how Mamba starts to forget the beginning of the context when we increase the context length, which is very different from the Transformer that [lost in the middle](https://arxiv.org/abs/2307.03172).
 
-## Scaling the context length to infinity with Transformer-XL Style Training
+## Scaling the Context Length to Infinity
 
 The maximum training length we can attain is still bounded by the limited GPU memory (in my case 16384 on 8 A100 80G). To overcome this, we can train Mamba in a Transformer-XL style. That is, for each batch, instead of initializing the SSM hidden states with zeros, we initialize them with the hidden states from the previous batch. 
 
@@ -164,13 +165,24 @@ This idea really excites me. Unfortunately, the current Mamba implementation doe
 
 <img src="data/Mamba_issue.png" width="800">
 
-Instead of twicking the CUDA code myself. I decide to wait for CUDA Master Tri Dao to implement this feature, because I am not confident if I can do it correctly.
+Instead of twicking the CUDA code myself. I decide to wait for CUDA Master Tri Dao to implement this feature, because I am not confident that I can do it efficiently and correctly.
 
 What I can do, however, is to modify the torch code. Code written in torch is obviously not as efficient as the CUDA code, and may use significantly more memory. But at least I can try out the smallest Mamba model and use it as a proof of concept.
+
+<details>
+  <summary>Code</summary>
+```bash
+# This is really slow (4 hours on 8 A100 40G)
+accelerate launch --num_processes 8  train-infinite.py --batch-size 1 --gradient-accumulate-every 2  --output-dir ./output/130m-infinite-lr-6e-5-1024-window-bs-16k-step200 \
+--wandb longmamba  --model state-spaces/mamba-130m --dataset PY007/tokenized_slim6B_train_neox_1024  --max-train-steps 200   --learning-rate 6e-5
+```
+</details>
+
+
 
 
 ## Next Step
 
 
 ## References
-This repository borrows code from the [yarn repo](https://github.com/jquesnelle/yarn) and the [Mamba repo](https://github.com/state-spaces/mamba).
+This repository borrows code from the [Mamba repo](https://github.com/state-spaces/mamba) and the [yarn repo](https://github.com/jquesnelle/yarn).
