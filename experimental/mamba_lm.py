@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 from mamba_ssm.models.config_mamba import MambaConfig
-from modeling.mamba_module import Mamba, Block
+from experimental.mamba_module import Mamba, Block
 from mamba_ssm.utils.generation import GenerationMixin
 from mamba_ssm.utils.hf import load_config_hf, load_state_dict_hf
 
@@ -140,19 +140,21 @@ class MixerModel(nn.Module):
             )
         )
 
-    def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
+    def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None,  **kwargs):
         return {
             i: layer.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype, **kwargs)
             for i, layer in enumerate(self.layers)
         }
 
-    def forward(self, input_ids, delta_ratio=None, inference_params=None):
+    def forward(self, input_ids, delta_ratio=None, inference_params=None, previous_hidden_states=None):
         hidden_states = self.embedding(input_ids)
         residual = None
+        new_states = []
         for layer in self.layers:
-            hidden_states, residual = layer(
-                hidden_states, residual, delta_ratio=delta_ratio, inference_params=inference_params
+            hidden_states, residual, new_state = layer(
+                hidden_states, residual, delta_ratio=delta_ratio, inference_params=inference_params, previous_hidden_states=previous_hidden_states
             )
+            new_states.append(new_state)
         if not self.fused_add_norm:
             residual = (hidden_states + residual) if residual is not None else hidden_states
             hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
@@ -168,7 +170,7 @@ class MixerModel(nn.Module):
                 prenorm=False,
                 residual_in_fp32=self.residual_in_fp32,
             )
-        return hidden_states
+        return hidden_states, new_states
 
 
 class MambaLMHeadModel(nn.Module, GenerationMixin):
@@ -223,17 +225,17 @@ class MambaLMHeadModel(nn.Module, GenerationMixin):
     def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
         return self.backbone.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype, **kwargs)
 
-    def forward(self, input_ids, position_ids=None, inference_params=None, delta_ratio=None, num_last_tokens=0):
+    def forward(self, input_ids, position_ids=None, inference_params=None, delta_ratio=None, num_last_tokens=0, previous_hidden_states=None):
         """
         "position_ids" is just to be compatible with Transformer generation. We don't use it.
         num_last_tokens: if > 0, only return the logits for the last n tokens
         """
-        hidden_states = self.backbone(input_ids, delta_ratio=delta_ratio, inference_params=inference_params)
+        hidden_states, new_states = self.backbone(input_ids, delta_ratio=delta_ratio, inference_params=inference_params, previous_hidden_states=previous_hidden_states)
         if num_last_tokens > 0:
             hidden_states = hidden_states[:, -num_last_tokens:]
         lm_logits = self.lm_head(hidden_states)
         CausalLMOutput = namedtuple("CausalLMOutput", ["logits"])
-        return CausalLMOutput(logits=lm_logits)
+        return CausalLMOutput(logits=lm_logits), new_states
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name, device=None, dtype=None, **kwargs):

@@ -99,8 +99,8 @@ I then train mamba-2.8b-slimpj on 16384 context length, the longest that I can f
   <summary>Code</summary>
 
 ```bash
-srun accelerate launch --num_processes 8  finetune.py --batch-size 1 --gradient-accumulate-every 16  --output-dir ./output/2.8B_slim_legnth_16384_step_400_lr_3e-5 \
---wandb longmamba  --model state-spaces/mamba-2.8b-slimpj --dataset PY007/tokenized_slim6B_train_neox_16384  --delta_ratio 1.0 --max-train-steps 400   --learning-rate 3e-5
+accelerate launch --num_processes 8  train.py --batch-size 1 --gradient-accumulate-every 16  --output-dir ./output/2.8B_slim_legnth_16384_step_400_lr_3e-5 \
+--wandb longmamba  --model state-spaces/mamba-2.8b-slimpj --dataset PY007/tokenized_slim6B_train_neox_16384  --max-train-steps 400   --learning-rate 3e-5
 # Model is uploaded to https://huggingface.co/PY007/LongMamba_16384_bs128_step400
 python eval.py \
     --tokenized PY007/tokenized_proof_pile_test_neox \

@@ -41,7 +41,7 @@ class Mamba(nn.Module):
         dt_init_floor=1e-4,
         conv_bias=True,
         bias=False,
-        use_fast_path=True,  # Fused kernel options
+        use_fast_path=False,  # Fused kernel options
         layer_idx=None,
         device=None,
         dtype=None,
@@ -114,7 +114,7 @@ class Mamba(nn.Module):
 
         self.out_proj = nn.Linear(self.d_inner, self.d_model, bias=bias, **factory_kwargs)
 
-    def forward(self, hidden_states, delta_ratio=None, inference_params=None):
+    def forward(self, hidden_states, delta_ratio=None, inference_params=None, previous_hidden_states=None):
         """
         hidden_states: (B, L, D)
         Returns: same shape as hidden_states
@@ -122,6 +122,8 @@ class Mamba(nn.Module):
         batch, seqlen, dim = hidden_states.shape
 
         conv_state, ssm_state = None, None
+        if previous_hidden_states is not None:
+            conv_state, ssm_state = previous_hidden_states[self.layer_idx]
         if inference_params is not None:
             conv_state, ssm_state = self._get_states_from_cache(inference_params, batch)
             if inference_params.seqlen_offset > 0:
@@ -130,17 +132,13 @@ class Mamba(nn.Module):
                 return out
 
         # We do matmul and transpose BLH -> HBL at the same time
-        xz = rearrange(
-            self.in_proj.weight @ rearrange(hidden_states, "b l d -> d (b l)"),
-            "d (b l) -> b d l",
-            l=seqlen,
-        )
+        xz = rearrange(self.in_proj.weight @ rearrange(hidden_states, "b l d -> d (b l)"), "d (b l) -> b d l", l=seqlen)
         if self.in_proj.bias is not None:
             xz = xz + rearrange(self.in_proj.bias.to(dtype=xz.dtype), "d -> d 1")
 
         A = -torch.exp(self.A_log.float())  # (d_inner, d_state)
         # In the backward pass we write dx and dz next to each other to avoid torch.cat
-        if self.use_fast_path and inference_params is None and not delta_ratio:  # Doesn't support outputting the states
+        if self.use_fast_path and inference_params is None and not delta_ratio and previous_hidden_states is None:  # Doesn't support outputting the states
             out = mamba_inner_fn(
                 xz,
                 self.conv1d.weight,
@@ -157,23 +155,28 @@ class Mamba(nn.Module):
                 delta_softplus=True,
             )
         else:
-            x, z = xz.chunk(2, dim=1)
-            # Compute short convolution
-            if conv_state is not None:
-                # If we just take x[:, :, -self.d_conv :], it will error if seqlen < self.d_conv
-                # Instead F.pad will pad with zeros if seqlen < self.d_conv, and truncate otherwise.
-                conv_state.copy_(F.pad(x, (self.d_conv - x.shape[-1], 0)))  # Update state (B D W)
-            if causal_conv1d_fn is None:
-                x = self.act(self.conv1d(x)[..., :seqlen])
+            if previous_hidden_states is None:
+                x, z = xz.chunk(2, dim=1)
+                if conv_state is not None:
+                    # If we just take x[:, :, -self.d_conv :], it will error if seqlen < self.d_conv
+                    # Instead F.pad will pad with zeros if seqlen < self.d_conv, and truncate otherwise.
+                    conv_state.copy_(F.pad(x, (self.d_conv - x.shape[-1], 0)))  # Update state (B D W)
+                if causal_conv1d_fn is None:
+                    x = self.act(self.conv1d(x)[..., :seqlen])
+                else:
+                    assert self.activation in ["silu", "swish"]
+                    x = causal_conv1d_fn(
+                        x=x,
+                        weight=rearrange(self.conv1d.weight, "d 1 w -> d w"),
+                        bias=self.conv1d.bias,
+                        activation=self.activation,
+                    )
             else:
-                assert self.activation in ["silu", "swish"]
-                x = causal_conv1d_fn(
-                    x=x,
-                    weight=rearrange(self.conv1d.weight, "d 1 w -> d w"),
-                    bias=self.conv1d.bias,
-                    activation=self.activation,
-                )
-
+                x, z = xz.chunk(2, dim=1)
+                x = torch.cat([conv_state, x], dim=-1)
+                x = causal_conv1d_fn(x=x,weight=rearrange(self.conv1d.weight, "d 1 w -> d w"),bias=self.conv1d.bias,activation=self.activation,)
+                new_conv_state = x[..., -(self.d_conv-1):].detach()
+                x = x[..., (self.d_conv-1):seqlen+(self.d_conv-1)]
             # We're careful here about the layout, to avoid extra transposes.
             # We want dt to have d as the slowest moving dimension
             # and L as the fastest moving dimension, since those are what the ssm_scan kernel expects.
@@ -182,7 +185,7 @@ class Mamba(nn.Module):
             B = rearrange(B, "(b l) dstate -> b dstate l", l=seqlen).contiguous()
             C = rearrange(C, "(b l) dstate -> b dstate l", l=seqlen).contiguous()
             assert self.activation in ["silu", "swish"]
-            if not delta_ratio:
+            if not delta_ratio and previous_hidden_states is None:
                 dt = self.dt_proj.weight @ dt.t()
                 dt = rearrange(dt, "d (b l) -> b d l", l=seqlen)
                 y = selective_scan_fn(
@@ -197,7 +200,7 @@ class Mamba(nn.Module):
                     delta_softplus=True,
                     return_last_state=ssm_state is not None,
                 )
-            else:
+            elif previous_hidden_states is None:
                 dt = (F.softplus(self.dt_proj(dt)) * delta_ratio).to(dtype=B.dtype)
                 dt = rearrange(dt, "(b l) d -> b d l", l=seqlen)
                 y = selective_scan_fn(
@@ -212,6 +215,25 @@ class Mamba(nn.Module):
                     delta_softplus=False,
                     return_last_state=ssm_state is not None,
                 )
+            else:
+                dt = self.dt_proj.weight @ dt.t()
+                dt = rearrange(dt, "d (b l) -> b d l", l=seqlen)
+                y, new_ssm_state = self.selective_scan_ref(
+                    x,
+                    dt,
+                    A,
+                    B,
+                    C,
+                    self.D.float(),
+                    z=z,
+                    delta_bias=self.dt_proj.bias.float(),
+                    delta_softplus=True,
+                    return_last_state=True,
+                    initial_state=ssm_state,
+                )
+                y = rearrange(y, "b d l -> b l d")
+                out = self.out_proj(y)
+                return out, [new_conv_state, new_ssm_state]
             if ssm_state is not None:
                 y, last_state = y
                 ssm_state.copy_(last_state)
@@ -219,8 +241,8 @@ class Mamba(nn.Module):
             out = self.out_proj(y)
         return out
     
-    def selective_scan_ref(u, delta, A, B, C, D=None, z=None, delta_bias=None, delta_softplus=False,
-                      return_last_state=False):
+    def selective_scan_ref(self, u, delta, A, B, C, D, z=None, delta_bias=None, delta_softplus=False,
+                      return_last_state=False, initial_state=None):
         """
         u: r(B D L)
         delta: r(B D L)
@@ -252,7 +274,7 @@ class Mamba(nn.Module):
         else:
             B = B.float()
             C = C.float()
-        x = A.new_zeros((batch, dim, dstate))
+        x = A.new_zeros((batch, dim, dstate)) if initial_state is None else initial_state
         ys = []
         deltaA = torch.exp(torch.einsum('bdl,dn->bdln', delta, A))
         if not is_variable_B:
@@ -285,7 +307,8 @@ class Mamba(nn.Module):
         if z is not None:
             out = out * F.silu(z)
         out = out.to(dtype=dtype_in)
-        return out if not return_last_state else (out, last_state)
+
+        return out if not return_last_state else (out, last_state.detach())
     
     
     def step(self, hidden_states, conv_state, ssm_state):
@@ -405,7 +428,7 @@ class Block(nn.Module):
             ), "Only LayerNorm and RMSNorm are supported for fused_add_norm"
 
     def forward(
-        self, hidden_states: Tensor, residual: Optional[Tensor] = None,  delta_ratio=None, inference_params=None
+        self, hidden_states: Tensor, residual: Optional[Tensor] = None,  delta_ratio=None, inference_params=None, previous_hidden_states=None
     ):
         r"""Pass the input through the encoder layer.
 
@@ -429,8 +452,8 @@ class Block(nn.Module):
                 residual_in_fp32=self.residual_in_fp32,
                 eps=self.norm.eps,
             )
-        hidden_states = self.mixer(hidden_states, delta_ratio=delta_ratio, inference_params=inference_params)
-        return hidden_states, residual
+        hidden_states, new_state = self.mixer(hidden_states, delta_ratio=delta_ratio, inference_params=inference_params, previous_hidden_states=previous_hidden_states)
+        return hidden_states, residual, new_state
 
     def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
         return self.mixer.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype, **kwargs)

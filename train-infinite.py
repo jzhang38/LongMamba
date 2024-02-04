@@ -112,12 +112,26 @@ def main(args):
 
 
     model.train()
+    clear_cache_interval = 1
+    previous_hidden_states = []
+    for layer_idx in range(model.config.n_layer):
+        conv_state = torch.zeros((1, model.config.d_model*2, 3), dtype=torch.bfloat16, device=accelerator.device).detach()
+        ssm_state = torch.zeros((1, model.config.d_model*2, 16), dtype=torch.bfloat16, device=accelerator.device).detach()
+        previous_hidden_states.append((conv_state, ssm_state))
     for step, batch in enumerate(train_loader):
+        if step % clear_cache_interval == 0:
+            for layer_idx in range(model.config.n_layer):
+                conv_state = torch.zeros((1, model.config.d_model*2, 3), dtype=torch.bfloat16, device=accelerator.device).detach()
+                ssm_state = torch.zeros((1, model.config.d_model*2, 16), dtype=torch.bfloat16, device=accelerator.device).detach()
+                previous_hidden_states.append((conv_state, ssm_state))
+            clear_cache_interval *= 2
         batch = {k: v.to(accelerator.device) for k, v in batch.items()}
         loss_log = None
         with accelerator.accumulate(model):
             loss_func = CrossEntropyLoss(inplace_backward=True)
-            logits = model(batch["input_ids"][..., :-1], delta_ratio=args.delta_ratio).logits
+            res = model(batch["input_ids"][..., :-1], delta_ratio=args.delta_ratio, previous_hidden_states=previous_hidden_states)
+            logits = res[0].logits
+            previous_hidden_states = res[1]
             loss = loss_func(logits.view(-1, logits.shape[-1]), batch["input_ids"][..., 1:].view(-1))
             accelerator.backward(loss)
 
@@ -129,7 +143,6 @@ def main(args):
             optim.step()
             scheduler.step()
             optim.zero_grad()
-
         if accelerator.sync_gradients:
             progress_bar.update(1)
             if loss_log is not None:
