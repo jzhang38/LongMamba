@@ -1,5 +1,7 @@
 # LongMamba
 This repo contains my exploration on Mamba's context scaling. It includes code to: 1. train Mamba on longer context 2. evaluate Mamba's PPL on the proof pile test set. 3. perform needle in a haystack test (pass-key retrieval).
+
+I have not polished the code in any way, so please bear with the spaghetti.
 ## Install
 <details>
   <summary>Code</summary>
@@ -165,7 +167,7 @@ This idea really excites me. Unfortunately, the current Mamba implementation doe
 
 <img src="data/Mamba_issue.png" width="800">
 
-Instead of twicking the CUDA code myself. I decide to wait for CUDA Master Tri Dao to implement this feature, because I am not confident that I can do it efficiently and correctly.
+Instead of tweaking the CUDA code myself. I decide to wait for CUDA Master Tri Dao to implement this feature, because I am not confident that I can do it efficiently and correctly.
 
 What I can do, however, is to modify the torch code. Code written in torch is obviously not as efficient as the CUDA code, and may use significantly more memory. But at least I can try out the smallest Mamba model and use it as a proof of concept.
 
