@@ -180,10 +180,7 @@ accelerate launch --num_processes 8  train-infinite.py --batch-size 1 --gradient
 ```
 </details>
 
-
-
-
-## Next Step
+The training is not very stable .. 
 
 
 ## References
