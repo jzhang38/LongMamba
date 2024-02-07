@@ -73,7 +73,7 @@ python plot.py --xmax 12288 --ymax 20 data/original_mamba_delta_ratio_0.5.csv
 ```
 </details>
 
-This approach appears to work, although the PPL for shorter contexts worsens.
+This approach appears to work, although the PPL for shorter contexts worsens. Note that I did not finetune the model in any way up till now.
 
 <img src="data/original_mamba_delta_ratio_0.5.csv.png" alt="PPL explode when increasing the context length" width="800"/>
 
