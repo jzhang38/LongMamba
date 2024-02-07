@@ -53,7 +53,7 @@ Mamba does not use positional embeddings, unlike Transformers. Instead, it is po
 
 <img src="data/mamba_byte.png" width="800"/>
 
-Suppose we want Mamba to operate within a 4096-token context, to make it think it's still operating at 2048, we can simply decrease the delta to one-half of the original value.
+Suppose we want Mamba to operate within a 4096-token context, to make it think it's still operating at 2048, we can simply decrease the delta to one-half of the original value. Since the delta value is input-depedent in mamba, I simply multiply every input-dependent delta with 1/2.
 <details>
   <summary>Code</summary>
 
