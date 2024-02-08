@@ -178,11 +178,12 @@ What I can do, however, is to modify the torch code. Code written in torch is ob
 
 <details>
   <summary>Code</summary>
+  
 ```bash
-# This is really slow (4 hours on 8 A100 40G)
 accelerate launch --num_processes 8  train-infinite.py --batch-size 1 --gradient-accumulate-every 2  --output-dir ./output/130m-infinite-lr-6e-5-1024-window-bs-16k-step200 \
 --wandb longmamba  --model state-spaces/mamba-130m --dataset PY007/tokenized_slim6B_train_neox_1024  --max-train-steps 200   --learning-rate 6e-5
 ```
+
 </details>
 
 The training is not very stable. I am still working on this part.
