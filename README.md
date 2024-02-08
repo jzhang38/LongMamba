@@ -184,7 +184,7 @@ accelerate launch --num_processes 8  train-infinite.py --batch-size 1 --gradient
 ```
 </details>
 
-The training is not very stable .. 
+The training is not very stable. I am still working on this part.
 
 
 ## References
