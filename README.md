@@ -1,5 +1,9 @@
 # LongMamba
-This repo contains my exploration of Mamba's context scaling. It includes code to: 1. train Mamba on a longer context 2. evaluate Mamba's PPL on the proof pile test set. 3. perform needle in a haystack test (pass-key retrieval).
+This repo contains my exploration of Mamba's context scaling. It includes code to: 1. train Mamba on a longer context. 2. evaluate Mamba's PPL on the proof pile test set. 3. perform needle in a haystack test (pass-key retrieval).
+
+At the end of this study,  we managed to make state-spaces/mamba-2.8b-slimpj retrieve nearly perfectly on a context length of 16384. 
+
+<img src="data/heatmap_16384.png" width="800">
 
 I have not polished the code in any way, so please bear with the spaghetti.
 ## Install
