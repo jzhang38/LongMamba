@@ -169,6 +169,7 @@ Suppose we set the sequence length within a single batch as 2048. One caveat is 
 
 This idea really excites me. Unfortunately, the current Mamba implementation does not support this. 
 
+(I do not claim any authorship of this idea because it is very straightforward to arrive at: https://github.com/state-spaces/mamba/issues/155. Just put it here for completeness.)
 <img src="data/Mamba_issue.png" width="800">
 
 Instead of tweaking the CUDA code myself. I decided to wait for CUDA Master Tri Dao to implement this feature, because I am not confident that I can do it efficiently and correctly.
